@@ -18,7 +18,6 @@ with patch('wazuh.common.ossec_uid'):
 
         wazuh.rbac.decorators.expose_resources = RBAC_bypasser
         from wazuh import mitre
-        from wazuh.core import mitre as core_mitre
 
 test_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data')
 
