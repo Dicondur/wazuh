@@ -4,16 +4,21 @@
 # This program is a free software; you can redistribute it and/or modify it under the terms of GPLv2
 
 import os
-from unittest.mock import patch
+import sys
+from unittest.mock import patch, MagicMock
+
+import pytest
 
 with patch('wazuh.common.ossec_uid'):
     with patch('wazuh.common.ossec_gid'):
+        sys.modules['wazuh.rbac.orm'] = MagicMock()
         import wazuh.rbac.decorators
 
         from wazuh.tests.util import get_fake_database_data, RBAC_bypasser, InitWDBSocketMock
 
         wazuh.rbac.decorators.expose_resources = RBAC_bypasser
         from wazuh import mitre
+        from wazuh.core import mitre as core_mitre
 
 test_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data')
 
@@ -21,9 +26,8 @@ test_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data
 # Tests
 
 @patch('wazuh.core.utils.WazuhDBConnection', return_value=InitWDBSocketMock(sql_schema_file='schema_mitre_test.sql'))
-def test_get_mitre_metadata(mock_mitre_db):
-    """Check MITRE metadata
-    """
+def test_mitre_metadata(mock_mitre_db):
+    """Check MITRE metadata."""
     result = mitre.mitre_metadata()
     cur = get_fake_database_data('schema_mitre_test.sql').cursor()
     cur.execute("SELECT * FROM metadata")
