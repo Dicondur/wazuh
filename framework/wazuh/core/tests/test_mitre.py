@@ -13,54 +13,49 @@ with patch('wazuh.core.common.ossec_uid'):
     with patch('wazuh.core.common.ossec_gid'):
         from wazuh.core.mitre import *
 
-# Tactics variables
-TACTICS_FIELDS = {'id': 'id', 'name': 'name', 'description': 'description', 'short_name': 'short_name',
-                  'created_time': 'created_time', 'modified_time': 'modified_time'}
-TACTICS_RELATION_FIELDS = {'related_techniques'}
-TACTICS_MIN_SELECT_FIELDS = {'id'}
-TACTICS_TABLE_NAME = 'tactic'
 
-
-@patch('wazuh.core.utils.WazuhDBConnection')
-def test_WazuhDBQueryMitre_metadata(mock_wdb):
+@patch('wazuh.core.utils.WazuhDBConnection', return_value=InitWDBSocketMock(sql_schema_file='schema_mitre_test.sql'))
+def test_WazuhDBQueryMitreMetadata(mock_wdb):
     """Verify that the method connects correctly to the database and returns the correct type."""
-    mock_wdb.return_value = InitWDBSocketMock(sql_schema_file='schema_mitre_test.sql')
     db_query = WazuhDBQueryMitreMetadata()
     data = db_query.run()
 
     assert isinstance(db_query, WazuhDBQueryMitre) and isinstance(data, dict)
 
 
-@patch('wazuh.core.utils.WazuhDBConnection')
-def test_WazuhDBQueryMitreTactics(mock_wdb):
-    """Test WazuhDBQueryMitreTactics class methods."""
-    # Test WazuhDBQueryMitre is called with the appropriate table
-    with patch('wazuh.core.mitre.WazuhDBQueryMitre.__init__') as mitre_init_mock:
-        WazuhDBQueryMitreTactics()
-        args, kwargs = mitre_init_mock.call_args
-        assert kwargs.get('table') == TACTICS_TABLE_NAME
-
-    # Verify that the method connects correctly to the database and returns the correct types.
-    mock_wdb.return_value = InitWDBSocketMock(sql_schema_file='schema_mitre_test.sql')
-    db_query = WazuhDBQueryMitreTactics()
-    assert db_query.fields == TACTICS_FIELDS and db_query.relation_fields == TACTICS_RELATION_FIELDS and isinstance(
-        db_query, WazuhDBQueryMitre)
-
+@pytest.mark.parametrize('wdb_query_class', [
+    WazuhDBQueryMitreTactics,
+    # TODO: add the rest of wdb query classes
+])
+@patch('wazuh.core.utils.WazuhDBConnection', return_value=InitWDBSocketMock(sql_schema_file='schema_mitre_test.sql'))
+def test_WazuhDBQueryMitre_classes(mock_wdb, wdb_query_class):
+    """Verify that the method connects correctly to the database and returns the correct types."""
+    db_query = wdb_query_class()
     data = db_query.run()
-    assert isinstance(data, dict)
+
+    assert isinstance(db_query, WazuhDBQueryMitre) and isinstance(data, dict)
+
+    # All items have all the related_items (relation_fields) and their type is list
     try:
-        assert all([isinstance(data['items'][0][related_item], list) for related_item in TACTICS_RELATION_FIELDS])
+        assert all(
+            isinstance(data_item[related_item], list) for related_item in db_query.relation_fields for data_item in
+            data['items'])
     except KeyError:
         pytest.fail("Related item not found in data obtained from query")
 
 
+@pytest.mark.parametrize('mitre_get_function, mitre_wdb_query_class', [
+    (get_tactics, WazuhDBQueryMitreTactics),
+    # TODO: add the rest of wdb query classes
+])
 @patch('wazuh.core.utils.WazuhDBConnection')
-def test_get_tactics(mock_wdb):
+def test_mitre_get_functions(mock_wdb, mitre_get_function, mitre_wdb_query_class):
     """Test get_tactics function."""
-    info, data = get_tactics()
+    info, data = mitre_get_function()
 
-    assert isinstance(info['allowed_fields'], set) and info['allowed_fields'] == set(TACTICS_FIELDS.keys()).union(
-        TACTICS_RELATION_FIELDS)
-    assert isinstance(info['min_select_fields'], set) and info['min_select_fields'] == TACTICS_MIN_SELECT_FIELDS
+    db_query_to_compare = mitre_wdb_query_class()
 
-    assert isinstance(data, dict)
+    assert isinstance(info['allowed_fields'], set) and info['allowed_fields'] == set(
+        db_query_to_compare.fields.keys()).union(db_query_to_compare.relation_fields)
+    assert isinstance(info['min_select_fields'], set) and info[
+        'min_select_fields'] == db_query_to_compare.min_select_fields
