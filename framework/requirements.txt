@@ -1,4 +1,4 @@
-pip==20.3.3
+pip==26.0
 wheel==0.34.2
 aiohttp-cache==2.2.0
 aiohttp-cors==0.7.0
